@@ -27,6 +27,7 @@ type parser struct {
 func (p *parser) ParseBody(end TokenType) (*Body, hcl.Diagnostics) {
 	attrs := Attributes{}
 	blocks := Blocks{}
+	ifBlocks := IfBlocks{}
 	var diags hcl.Diagnostics
 
 	startRange := p.PrevRange()
@@ -51,6 +52,8 @@ Token:
 			switch titem := item.(type) {
 			case *Block:
 				blocks = append(blocks, titem)
+			case *IfBlock:
+				ifBlocks = append(ifBlocks, titem)
 			case *Attribute:
 				if existing, exists := attrs[titem.Name]; exists {
 					diags = append(diags, &hcl.Diagnostic{
@@ -128,6 +131,7 @@ Token:
 	return &Body{
 		Attributes: attrs,
 		Blocks:     blocks,
+		IfBlocks:   ifBlocks,
 
 		SrcRange: hcl.RangeBetween(startRange, endRange),
 		EndRange: hcl.Range{
@@ -158,6 +162,9 @@ func (p *parser) ParseBodyItem() (Node, hcl.Diagnostics) {
 	case TokenEqual:
 		return p.finishParsingBodyAttribute(ident, false)
 	case TokenOQuote, TokenOBrace, TokenIdent:
+		if ident.Type == TokenIdent && string(ident.Bytes) == "if" {
+			return p.parseIfBlock(ident)
+		}
 		return p.finishParsingBodyBlock(ident)
 	default:
 		p.recoverAfterBodyItem()
@@ -2227,4 +2234,97 @@ func errPlaceholderExpr(rng hcl.Range) Expression {
 		Val:      cty.DynamicVal,
 		SrcRange: rng,
 	}
+}
+
+func (p *parser) parseIfBlock(ident Token) (Node, hcl.Diagnostics) {
+	var diags hcl.Diagnostics
+
+	// Parse the condition expression
+	condition, condDiags := p.ParseExpression()
+	diags = append(diags, condDiags...)
+
+	// The peeker should now be pointing at the opening brace
+	if p.Peek().Type == TokenOBrace {
+		p.Read()
+	} else {
+		diags = append(diags, &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  "Invalid if block",
+			Detail:   "An opening brace \"{\" is required after the if condition.",
+			Subject:  p.Peek().Range.Ptr(),
+		})
+		p.recover(TokenCBrace)
+		return nil, diags
+	}
+
+	// Parse the body
+	body, bodyDiags := p.ParseBody(TokenCBrace)
+	diags = append(diags, bodyDiags...)
+	
+	// Eat the closing brace
+	p.PrevRange()
+
+	// Check for 'else'
+	var elseBody *Body
+	var elseRange *hcl.Range
+
+	next := p.Peek()
+	if next.Type == TokenIdent && string(next.Bytes) == "else" {
+		elseToken := p.Read() // consume "else"
+		
+		if p.Peek().Type == TokenOBrace {
+			p.Read() // {
+			elseB, elseDiags := p.ParseBody(TokenCBrace)
+			diags = append(diags, elseDiags...)
+			elseBody = elseB
+			rng := hcl.RangeBetween(elseToken.Range, p.PrevRange())
+			elseRange = &rng
+		} else {
+			if p.Peek().Type == TokenIdent && string(p.Peek().Bytes) == "if" {
+				ifTok := p.Read()
+				elseIfNode, elseIfDiags := p.parseIfBlock(ifTok)
+				diags = append(diags, elseIfDiags...)
+				
+				if elseIfBlock, ok := elseIfNode.(*IfBlock); ok {
+					elseBody = &Body{
+						IfBlocks: []*IfBlock{elseIfBlock},
+						SrcRange: elseIfBlock.Range(),
+						EndRange: elseIfBlock.Range(),
+					}
+					rng := hcl.RangeBetween(elseToken.Range, p.PrevRange())
+					elseRange = &rng
+				}
+			} else {
+				diags = append(diags, &hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Invalid else block",
+					Detail:   "An opening brace \"{\" or \"if\" is required after else.",
+					Subject:  p.Peek().Range.Ptr(),
+				})
+			}
+		}
+	} else {
+		eol := p.Peek()
+		if eol.Type == TokenNewline || eol.Type == TokenEOF {
+			p.Read()
+		} else {
+			if !p.recovery {
+				diags = append(diags, &hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Missing newline after if block definition",
+					Detail:   "An if block must end with a newline or be followed by else.",
+					Subject:  &eol.Range,
+				})
+			}
+			p.recoverAfterBodyItem()
+		}
+	}
+
+	return &IfBlock{
+		Condition: condition,
+		Body:      body,
+		Else:      elseBody,
+		IfRange:   ident.Range,
+		ElseRange: elseRange,
+	}, diags
 }

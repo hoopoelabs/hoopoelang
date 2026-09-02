@@ -31,6 +31,7 @@ func (b *Block) AsHCLBlock() *hcl.Block {
 type Body struct {
 	Attributes Attributes
 	Blocks     Blocks
+	IfBlocks   IfBlocks
 
 	// These are used with PartialContent to produce a "remaining items"
 	// body to return. They are nil on all bodies fresh out of the parser.
@@ -47,6 +48,7 @@ var _ hcl.Body = &Body{}
 func (b *Body) walkChildNodes(w internalWalkFunc) {
 	w(b.Attributes)
 	w(b.Blocks)
+	w(b.IfBlocks)
 }
 
 func (b *Body) Range() hcl.Range {
@@ -393,4 +395,48 @@ func (b *Block) DefRange() hcl.Range {
 		lastHeaderRange = b.LabelRanges[len(b.LabelRanges)-1]
 	}
 	return hcl.RangeBetween(b.TypeRange, lastHeaderRange)
+}
+
+// IfBlocks is the list of nested if blocks within a body.
+type IfBlocks []*IfBlock
+
+func (ibs IfBlocks) walkChildNodes(w internalWalkFunc) {
+	for _, ib := range ibs {
+		w(ib)
+	}
+}
+
+func (ibs IfBlocks) Range() hcl.Range {
+	if len(ibs) > 0 {
+		return ibs[0].Range()
+	}
+	return hcl.Range{
+		Filename: "<unknown>",
+	}
+}
+
+// IfBlock represents a native if/else conditional block
+type IfBlock struct {
+	Condition Expression
+	Body      *Body
+	Else      *Body // Optional else block
+
+	IfRange    hcl.Range
+	ElseRange  *hcl.Range
+}
+
+func (b *IfBlock) walkChildNodes(w internalWalkFunc) {
+	w(b.Condition)
+	w(b.Body)
+	if b.Else != nil {
+		w(b.Else)
+	}
+}
+
+func (b *IfBlock) Range() hcl.Range {
+	end := b.Body.EndRange
+	if b.Else != nil {
+		end = b.Else.EndRange
+	}
+	return hcl.RangeBetween(b.IfRange, end)
 }
