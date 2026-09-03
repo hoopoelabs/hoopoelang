@@ -6,7 +6,7 @@ package hclsyntax
 import (
     "bytes"
 
-    "github.com/hashicorp/hcl/v2"
+    "github.com/hoopoelabs/hoopoelang"
 )
 
 // This file is generated from scan_tokens.rl. DO NOT EDIT.
@@ -54,6 +54,8 @@ func scanTokens(data []byte, filename string, start hcl.Pos, mode scanMode) []To
         LessThanEqual = "<=";
         LogicalAnd = "&&";
         LogicalOr = "||";
+        NullCoalesce = "??";
+        QuestionDot = "?.";
 
         DoubleColon = "::";
         Ellipsis = "...";
@@ -297,6 +299,8 @@ func scanTokens(data []byte, filename string, start hcl.Pos, mode scanMode) []To
             LessThanEqual    => { token(TokenLessThanEq); };
             LogicalAnd       => { token(TokenAnd); };
             LogicalOr        => { token(TokenOr); };
+            NullCoalesce     => { token(TokenQuestionQuestion); };
+            QuestionDot      => { token(TokenQuestionDot); };
             DoubleColon      => { token(TokenDoubleColon); };
             Ellipsis         => { token(TokenEllipsis); };
             FatArrow         => { token(TokenFatArrow); };

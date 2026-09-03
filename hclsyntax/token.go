@@ -67,8 +67,10 @@ const (
 	TokenEllipsis    TokenType = '…'
 	TokenFatArrow    TokenType = '⇒'
 
-	TokenQuestion TokenType = '?'
-	TokenColon    TokenType = ':'
+	TokenQuestion         TokenType = '?'
+	TokenQuestionQuestion TokenType = '⁇' // "??" null-coalescing operator
+	TokenQuestionDot      TokenType = '¿' // "?." optional attribute/index access
+	TokenColon            TokenType = ':'
 
 	TokenTemplateInterp  TokenType = '∫'
 	TokenTemplateControl TokenType = 'λ'

@@ -650,11 +650,15 @@ Level    Operators
   3      == !=
   2      &&
   1      ||
+  0      ??
 ```
 
 Higher values of "level" bind tighter. Operators within the same precedence
 level have left-to-right associativity. For example, `x / y * z` is equivalent
 to `(x / y) * z`.
+
+The null-coalescing operator `??` binds looser than `||` but tighter than
+the conditional operator `? :`.
 
 ### Comparison Operators
 
@@ -748,6 +752,45 @@ these errors are passed through only if the erroneous expression is selected.
 This allows for expressions such as
 `length(some_list) > 0 ? some_list[0] : default` (given some suitable `length`
 function) without producing an error when the predicate is `false`.
+
+### Null-coalescing Operator
+
+The null-coalescing operator selects its right operand when the left operand
+is null; otherwise it returns the left operand.
+
+```ebnf
+NullCoalesce = Expression "??" Expression;
+```
+
+Only a null left-hand value causes the right-hand expression to be selected.
+Unknown non-null values are returned as-is. If the left-hand value is unknown
+and could still become null, the result is an unknown value of a type unified
+from both operands.
+
+The right-hand expression is evaluated only when needed (when the left-hand
+value is null, or when it is unknown and could be null).
+
+### Optional Chaining Operator
+
+The optional chaining operator short-circuits attribute or index access when
+the value on the left is null.
+
+```ebnf
+OptionalChain = Expression "?." (Ident | Index);
+```
+
+Examples: `obj?.attr`, `obj?.attr.nested`, `list?.[0]`, `obj?.attr ?? "default"`.
+
+If the left-hand expression evaluates to null, the result is a null value of
+the dynamic pseudo-type and the remainder of the chain after `?.` is not
+evaluated. Otherwise the remainder is evaluated against the left-hand value,
+exactly as for normal attribute/index access.
+
+`a?.b.c` short-circuits the whole trailing traversal when `a` is null.
+`a?.b?.c` introduces a second null check at `b`.
+
+Optional chaining does not suppress errors from undefined variables or other
+evaluation failures on the left-hand side; use `try(...)` for that.
 
 ## Templates
 

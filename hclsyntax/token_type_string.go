@@ -5,7 +5,7 @@ package hclsyntax
 import "strconv"
 
 func _() {
-	// An "invalid array index" compiler error signifies that the constant values (55) have changed.
+	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[TokenOBrace-123]
@@ -39,6 +39,8 @@ func _() {
 	_ = x[TokenEllipsis-8230]
 	_ = x[TokenFatArrow-8658]
 	_ = x[TokenQuestion-63]
+	_ = x[TokenQuestionQuestion-8263]
+	_ = x[TokenQuestionDot-191]
 	_ = x[TokenColon-58]
 	_ = x[TokenTemplateInterp-8747]
 	_ = x[TokenTemplateControl-955]
@@ -65,7 +67,7 @@ func _() {
 	_ = x[TokenNil-0]
 }
 
-const _TokenType_name = "TokenNilTokenNewlineTokenBangTokenPercentTokenBitwiseAndTokenApostropheTokenOParenTokenCParenTokenStarTokenPlusTokenCommaTokenMinusTokenDotTokenSlashTokenColonTokenSemicolonTokenLessThanTokenEqualTokenGreaterThanTokenQuestionTokenCommentTokenOHeredocTokenIdentTokenNumberLitTokenQuotedLitTokenStringLitTokenOBrackTokenCBrackTokenBitwiseXorTokenBacktickTokenCHeredocTokenOBraceTokenBitwiseOrTokenCBraceTokenBitwiseNotTokenOQuoteTokenCQuoteTokenTemplateControlTokenEllipsisTokenFatArrowTokenTemplateSeqEndTokenAndTokenOrTokenTemplateInterpTokenEqualOpTokenNotEqualTokenLessThanEqTokenGreaterThanEqTokenEOFTokenTabsTokenQuotedNewlineTokenStarStarTokenDoubleColonTokenInvalidTokenBadUTF8"
+const _TokenType_name = "TokenNilTokenNewlineTokenBangTokenPercentTokenBitwiseAndTokenApostropheTokenOParenTokenCParenTokenStarTokenPlusTokenCommaTokenMinusTokenDotTokenSlashTokenColonTokenSemicolonTokenLessThanTokenEqualTokenGreaterThanTokenQuestionTokenCommentTokenOHeredocTokenIdentTokenNumberLitTokenQuotedLitTokenStringLitTokenOBrackTokenCBrackTokenBitwiseXorTokenBacktickTokenCHeredocTokenOBraceTokenBitwiseOrTokenCBraceTokenBitwiseNotTokenOQuoteTokenCQuoteTokenQuestionDotTokenTemplateControlTokenEllipsisTokenQuestionQuestionTokenFatArrowTokenTemplateSeqEndTokenAndTokenOrTokenTemplateInterpTokenEqualOpTokenNotEqualTokenLessThanEqTokenGreaterThanEqTokenEOFTokenTabsTokenQuotedNewlineTokenStarStarTokenDoubleColonTokenInvalidTokenBadUTF8"
 
 var _TokenType_map = map[TokenType]string{
 	0:      _TokenType_name[0:8],
@@ -105,24 +107,26 @@ var _TokenType_map = map[TokenType]string{
 	126:    _TokenType_name[401:416],
 	171:    _TokenType_name[416:427],
 	187:    _TokenType_name[427:438],
-	955:    _TokenType_name[438:458],
-	8230:   _TokenType_name[458:471],
-	8658:   _TokenType_name[471:484],
-	8718:   _TokenType_name[484:503],
-	8743:   _TokenType_name[503:511],
-	8744:   _TokenType_name[511:518],
-	8747:   _TokenType_name[518:537],
-	8788:   _TokenType_name[537:549],
-	8800:   _TokenType_name[549:562],
-	8804:   _TokenType_name[562:577],
-	8805:   _TokenType_name[577:595],
-	9220:   _TokenType_name[595:603],
-	9225:   _TokenType_name[603:612],
-	9252:   _TokenType_name[612:630],
-	10138:  _TokenType_name[630:643],
-	11820:  _TokenType_name[643:659],
-	65533:  _TokenType_name[659:671],
-	128169: _TokenType_name[671:683],
+	191:    _TokenType_name[438:454],
+	955:    _TokenType_name[454:474],
+	8230:   _TokenType_name[474:487],
+	8263:   _TokenType_name[487:508],
+	8658:   _TokenType_name[508:521],
+	8718:   _TokenType_name[521:540],
+	8743:   _TokenType_name[540:548],
+	8744:   _TokenType_name[548:555],
+	8747:   _TokenType_name[555:574],
+	8788:   _TokenType_name[574:586],
+	8800:   _TokenType_name[586:599],
+	8804:   _TokenType_name[599:614],
+	8805:   _TokenType_name[614:632],
+	9220:   _TokenType_name[632:640],
+	9225:   _TokenType_name[640:649],
+	9252:   _TokenType_name[649:667],
+	10138:  _TokenType_name[667:680],
+	11820:  _TokenType_name[680:696],
+	65533:  _TokenType_name[696:708],
+	128169: _TokenType_name[708:720],
 }
 
 func (i TokenType) String() string {

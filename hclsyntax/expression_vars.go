@@ -42,11 +42,19 @@ func (e *LiteralValueExpr) Variables() []hcl.Traversal {
 	return Variables(e)
 }
 
+func (e *NullCoalesceExpr) Variables() []hcl.Traversal {
+	return Variables(e)
+}
+
 func (e *ObjectConsExpr) Variables() []hcl.Traversal {
 	return Variables(e)
 }
 
 func (e *ObjectConsKeyExpr) Variables() []hcl.Traversal {
+	return Variables(e)
+}
+
+func (e *OptionalTraversalExpr) Variables() []hcl.Traversal {
 	return Variables(e)
 }
 

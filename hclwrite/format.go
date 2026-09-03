@@ -239,8 +239,9 @@ func spaceAfterToken(subject, before, after *Token) bool {
 		// Don't split namespace segments in a function call
 		return false
 
-	case subject.Type == hclsyntax.TokenDot || after.Type == hclsyntax.TokenDot:
-		// Don't use spaces around attribute access dots
+	case subject.Type == hclsyntax.TokenDot || after.Type == hclsyntax.TokenDot ||
+		subject.Type == hclsyntax.TokenQuestionDot || after.Type == hclsyntax.TokenQuestionDot:
+		// Don't use spaces around attribute access dots or optional chaining
 		return false
 
 	case after.Type == hclsyntax.TokenComma || after.Type == hclsyntax.TokenEllipsis:
@@ -264,7 +265,7 @@ func spaceAfterToken(subject, before, after *Token) bool {
 		// to make the result less confusing.
 		return true
 
-	case after.Type == hclsyntax.TokenOBrack && (subject.Type == hclsyntax.TokenIdent || subject.Type == hclsyntax.TokenNumberLit || tokenBracketChange(subject) < 0):
+	case after.Type == hclsyntax.TokenOBrack && (subject.Type == hclsyntax.TokenIdent || subject.Type == hclsyntax.TokenNumberLit || subject.Type == hclsyntax.TokenQuestionDot || tokenBracketChange(subject) < 0):
 		return false
 
 	case subject.Type == hclsyntax.TokenBang:
@@ -296,7 +297,7 @@ func spaceAfterToken(subject, before, after *Token) bool {
 			// Minus immediately after another comparison operator must be negation.
 			return false
 
-		case hclsyntax.TokenAnd, hclsyntax.TokenOr, hclsyntax.TokenBang:
+		case hclsyntax.TokenAnd, hclsyntax.TokenOr, hclsyntax.TokenBang, hclsyntax.TokenQuestionQuestion:
 			// Minus immediately after logical operator doesn't make sense but probably intended as negation.
 			return false
 

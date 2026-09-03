@@ -515,7 +515,7 @@ func (p *parser) parseTernaryConditional() (Expression, hcl.Diagnostics) {
 	var condExpr, trueExpr, falseExpr Expression
 	var diags hcl.Diagnostics
 
-	condExpr, condDiags := p.parseBinaryOps(binaryOps)
+	condExpr, condDiags := p.parseNullCoalesce()
 	diags = append(diags, condDiags...)
 	if p.recovery && condDiags.HasErrors() {
 		return condExpr, diags
@@ -561,6 +561,34 @@ func (p *parser) parseTernaryConditional() (Expression, hcl.Diagnostics) {
 
 		SrcRange: hcl.RangeBetween(startRange, falseExpr.Range()),
 	}, diags
+}
+
+// parseNullCoalesce parses the null-coalescing operator (a ?? b), which sits
+// between the ternary conditional and the other binary operators in precedence.
+func (p *parser) parseNullCoalesce() (Expression, hcl.Diagnostics) {
+	var diags hcl.Diagnostics
+
+	lhs, lhsDiags := p.parseBinaryOps(binaryOps)
+	diags = append(diags, lhsDiags...)
+	if p.recovery && lhsDiags.HasErrors() {
+		return lhs, diags
+	}
+
+	for p.Peek().Type == TokenQuestionQuestion {
+		p.Read() // eat ??
+		rhs, rhsDiags := p.parseBinaryOps(binaryOps)
+		diags = append(diags, rhsDiags...)
+		if p.recovery && rhsDiags.HasErrors() {
+			return lhs, diags
+		}
+		lhs = &NullCoalesceExpr{
+			LHS:      lhs,
+			RHS:      rhs,
+			SrcRange: hcl.RangeBetween(lhs.Range(), rhs.Range()),
+		}
+	}
+
+	return lhs, diags
 }
 
 // parseBinaryOps calls itself recursively to work through all of the
@@ -654,6 +682,109 @@ Traversal:
 		next := p.Peek()
 
 		switch next.Type {
+		case TokenQuestionDot:
+			// Optional chaining: a?.attr, a?.[idx], then more traversals.
+			marker := p.Read()
+			itemExpr := &AnonSymbolExpr{
+				SrcRange: marker.Range,
+			}
+
+			var thenExpr Expression
+			switch p.Peek().Type {
+			case TokenIdent:
+				attrTok := p.Read()
+				name := string(attrTok.Bytes)
+				rng := hcl.RangeBetween(marker.Range, attrTok.Range)
+				thenExpr = makeRelativeTraversal(itemExpr, hcl.TraverseAttr{
+					Name:     name,
+					SrcRange: rng,
+				}, rng)
+
+			case TokenOBrack:
+				open := p.Read()
+				switch p.Peek().Type {
+				case TokenStar:
+					diags = append(diags, &hcl.Diagnostic{
+						Severity: hcl.DiagError,
+						Summary:  "Invalid optional splat",
+						Detail:   "The optional chaining operator (?.) cannot be followed by a splat (*). Use a normal splat after a non-null value, or guard with ?? / try().",
+						Subject:  p.Peek().Range.Ptr(),
+						Context:  hcl.RangeBetween(marker.Range, p.Peek().Range).Ptr(),
+					})
+					p.setRecovery()
+					continue Traversal
+				default:
+					var close Token
+					p.PushIncludeNewlines(false)
+					keyExpr, keyDiags := p.ParseExpression()
+					diags = append(diags, keyDiags...)
+					if p.recovery && keyDiags.HasErrors() {
+						close = p.recover(TokenCBrack)
+					} else {
+						close = p.Read()
+						if close.Type != TokenCBrack && !p.recovery {
+							diags = append(diags, &hcl.Diagnostic{
+								Severity: hcl.DiagError,
+								Summary:  "Missing close bracket on index",
+								Detail:   "The index operator must end with a closing bracket (\"]\").",
+								Subject:  &close.Range,
+							})
+							close = p.recover(TokenCBrack)
+						}
+					}
+					p.PopIncludeNewlines()
+
+					rng := hcl.RangeBetween(open.Range, close.Range)
+					if lit, isLit := keyExpr.(*LiteralValueExpr); isLit {
+						litKey, _ := lit.Value(nil)
+						thenExpr = makeRelativeTraversal(itemExpr, hcl.TraverseIndex{
+							Key:      litKey,
+							SrcRange: rng,
+						}, rng)
+					} else if tmpl, isTmpl := keyExpr.(*TemplateExpr); isTmpl && tmpl.IsStringLiteral() {
+						litKey, _ := tmpl.Value(nil)
+						thenExpr = makeRelativeTraversal(itemExpr, hcl.TraverseIndex{
+							Key:      litKey,
+							SrcRange: rng,
+						}, rng)
+					} else {
+						thenExpr = &IndexExpr{
+							Collection:   itemExpr,
+							Key:          keyExpr,
+							SrcRange:     hcl.RangeBetween(itemExpr.Range(), rng),
+							OpenRange:    open.Range,
+							BracketRange: rng,
+						}
+					}
+				}
+
+			default:
+				diags = append(diags, &hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Invalid optional chain",
+					Detail:   "Expected an attribute name or index after the optional chaining operator (?.).",
+					Subject:  p.Peek().Range.Ptr(),
+					Context:  marker.Range.Ptr(),
+				})
+				p.setRecovery()
+				continue Traversal
+			}
+
+			// Continue with normal (and further optional) traversals on the
+			// placeholder, so a?.b.c short-circuits the whole remainder and
+			// a?.b?.c nests another optional chain.
+			var moreDiags hcl.Diagnostics
+			thenExpr, moreDiags = p.parseExpressionTraversals(thenExpr)
+			diags = append(diags, moreDiags...)
+
+			ret = &OptionalTraversalExpr{
+				Source:      ret,
+				Then:        thenExpr,
+				Item:        itemExpr,
+				SrcRange:    hcl.RangeBetween(from.Range(), thenExpr.Range()),
+				MarkerRange: marker.Range,
+			}
+
 		case TokenDot:
 			// Attribute access or splat
 			dot := p.Read()

@@ -1090,6 +1090,125 @@ func (e *ConditionalExpr) StartRange() hcl.Range {
 	return e.Condition.StartRange()
 }
 
+// NullCoalesceExpr is the null-coalescing operator a ?? b.
+// It returns the left operand unless that value is null, in which case it
+// returns the right operand.
+type NullCoalesceExpr struct {
+	LHS Expression
+	RHS Expression
+
+	SrcRange hcl.Range
+}
+
+func (e *NullCoalesceExpr) walkChildNodes(w internalWalkFunc) {
+	w(e.LHS)
+	w(e.RHS)
+}
+
+func (e *NullCoalesceExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
+	lhs, lhsDiags := e.LHS.Value(ctx)
+	if lhsDiags.HasErrors() {
+		return cty.DynamicVal, lhsDiags
+	}
+
+	lhsUnmarked, lhsMarks := lhs.Unmark()
+	if lhsUnmarked.IsNull() {
+		rhs, rhsDiags := e.RHS.Value(ctx)
+		diags := append(lhsDiags, rhsDiags...)
+		return rhs.WithMarks(lhsMarks), diags
+	}
+
+	if !lhsUnmarked.IsKnown() {
+		// Unknown values that could still become null require evaluating the
+		// RHS for a consistent type, similar to a conditional expression.
+		if lhsUnmarked.Range().CouldBeNull() {
+			rhs, rhsDiags := e.RHS.Value(ctx)
+			diags := append(lhsDiags, rhsDiags...)
+
+			resultType, convs := convert.UnifyUnsafe([]cty.Type{lhsUnmarked.Type(), rhs.Type()})
+			if resultType == cty.NilType {
+				// Fall back to dynamic when the sides can't unify.
+				return cty.DynamicVal.WithMarks(lhsMarks), diags
+			}
+
+			rhsUnmarked, rhsMarks := rhs.Unmark()
+			if convs[0] != nil {
+				var err error
+				lhsUnmarked, err = convs[0](lhsUnmarked)
+				if err != nil {
+					return cty.UnknownVal(resultType).WithMarks(lhsMarks, rhsMarks), diags
+				}
+			}
+			_ = rhsUnmarked // type checked via unify
+			return cty.UnknownVal(resultType).WithMarks(lhsMarks, rhsMarks), diags
+		}
+	}
+
+	return lhs, lhsDiags
+}
+
+func (e *NullCoalesceExpr) Range() hcl.Range {
+	return e.SrcRange
+}
+
+func (e *NullCoalesceExpr) StartRange() hcl.Range {
+	return e.LHS.StartRange()
+}
+
+// OptionalTraversalExpr is the optional chaining operator a?.b / a?.[i].
+// If Source evaluates to null, the result is null and Then is not evaluated.
+// Otherwise Then is evaluated with Item bound to the source value.
+type OptionalTraversalExpr struct {
+	Source Expression
+	Then   Expression
+	Item   *AnonSymbolExpr
+
+	SrcRange    hcl.Range
+	MarkerRange hcl.Range
+}
+
+func (e *OptionalTraversalExpr) walkChildNodes(w internalWalkFunc) {
+	w(e.Source)
+	w(e.Then)
+}
+
+func (e *OptionalTraversalExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
+	src, diags := e.Source.Value(ctx)
+	if diags.HasErrors() {
+		return cty.DynamicVal, diags
+	}
+
+	srcUnmarked, marks := src.Unmark()
+	if srcUnmarked.IsNull() {
+		return cty.NullVal(cty.DynamicPseudoType).WithMarks(marks), diags
+	}
+
+	if srcUnmarked.Type() == cty.DynamicPseudoType {
+		return cty.DynamicVal.WithMarks(marks), diags
+	}
+
+	if !srcUnmarked.IsKnown() && srcUnmarked.Range().CouldBeNull() {
+		return cty.DynamicVal.WithMarks(marks), diags
+	}
+
+	if ctx == nil {
+		ctx = &hcl.EvalContext{}
+	}
+	e.Item.setValue(ctx, srcUnmarked)
+	ret, thenDiags := e.Then.Value(ctx)
+	e.Item.clearValue(ctx)
+	diags = append(diags, thenDiags...)
+	return ret.WithMarks(marks), diags
+}
+
+func (e *OptionalTraversalExpr) Range() hcl.Range {
+	return e.SrcRange
+}
+
+func (e *OptionalTraversalExpr) StartRange() hcl.Range {
+	return e.Source.StartRange()
+}
+
 type IndexExpr struct {
 	Collection Expression
 	Key        Expression
