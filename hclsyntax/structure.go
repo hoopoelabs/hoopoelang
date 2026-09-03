@@ -32,6 +32,7 @@ type Body struct {
 	Attributes Attributes
 	Blocks     Blocks
 	IfBlocks   IfBlocks
+	ForBlocks  ForBlocks
 
 	// These are used with PartialContent to produce a "remaining items"
 	// body to return. They are nil on all bodies fresh out of the parser.
@@ -49,6 +50,7 @@ func (b *Body) walkChildNodes(w internalWalkFunc) {
 	w(b.Attributes)
 	w(b.Blocks)
 	w(b.IfBlocks)
+	w(b.ForBlocks)
 }
 
 func (b *Body) Range() hcl.Range {
@@ -439,4 +441,41 @@ func (b *IfBlock) Range() hcl.Range {
 		end = b.Else.EndRange
 	}
 	return hcl.RangeBetween(b.IfRange, end)
+}
+
+// ForBlocks is the list of nested for blocks within a body.
+type ForBlocks []*ForBlock
+
+func (fbs ForBlocks) walkChildNodes(w internalWalkFunc) {
+	for _, fb := range fbs {
+		w(fb)
+	}
+}
+
+func (fbs ForBlocks) Range() hcl.Range {
+	if len(fbs) > 0 {
+		return fbs[0].Range()
+	}
+	return hcl.Range{
+		Filename: "<unknown>",
+	}
+}
+
+// ForBlock represents a native for loop block
+type ForBlock struct {
+	KeyVar     string
+	ValVar     string
+	CollExpr   Expression
+	Body       *Body
+
+	ForRange   hcl.Range
+}
+
+func (b *ForBlock) walkChildNodes(w internalWalkFunc) {
+	w(b.CollExpr)
+	w(b.Body)
+}
+
+func (b *ForBlock) Range() hcl.Range {
+	return hcl.RangeBetween(b.ForRange, b.Body.EndRange)
 }

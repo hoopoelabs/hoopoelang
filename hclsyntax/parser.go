@@ -27,7 +27,8 @@ type parser struct {
 func (p *parser) ParseBody(end TokenType) (*Body, hcl.Diagnostics) {
 	attrs := Attributes{}
 	blocks := Blocks{}
-	ifBlocks := IfBlocks{}
+	var ifBlocks IfBlocks
+	var forBlocks ForBlocks
 	var diags hcl.Diagnostics
 
 	startRange := p.PrevRange()
@@ -54,6 +55,8 @@ Token:
 				blocks = append(blocks, titem)
 			case *IfBlock:
 				ifBlocks = append(ifBlocks, titem)
+			case *ForBlock:
+				forBlocks = append(forBlocks, titem)
 			case *Attribute:
 				if existing, exists := attrs[titem.Name]; exists {
 					diags = append(diags, &hcl.Diagnostic{
@@ -132,6 +135,7 @@ Token:
 		Attributes: attrs,
 		Blocks:     blocks,
 		IfBlocks:   ifBlocks,
+		ForBlocks:  forBlocks,
 
 		SrcRange: hcl.RangeBetween(startRange, endRange),
 		EndRange: hcl.Range{
@@ -164,6 +168,9 @@ func (p *parser) ParseBodyItem() (Node, hcl.Diagnostics) {
 	case TokenOQuote, TokenOBrace, TokenIdent:
 		if ident.Type == TokenIdent && string(ident.Bytes) == "if" {
 			return p.parseIfBlock(ident)
+		}
+		if ident.Type == TokenIdent && string(ident.Bytes) == "for" {
+			return p.parseForBlock(ident)
 		}
 		return p.finishParsingBodyBlock(ident)
 	default:
@@ -2326,5 +2333,102 @@ func (p *parser) parseIfBlock(ident Token) (Node, hcl.Diagnostics) {
 		Else:      elseBody,
 		IfRange:   ident.Range,
 		ElseRange: elseRange,
+	}, diags
+}
+
+func (p *parser) parseForBlock(ident Token) (Node, hcl.Diagnostics) {
+	var diags hcl.Diagnostics
+	var keyVar, valVar string
+
+	// Parse first variable
+	tok1 := p.Read()
+	if tok1.Type != TokenIdent {
+		diags = append(diags, &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  "Invalid for block",
+			Detail:   "A variable name is required after the 'for' keyword.",
+			Subject:  &tok1.Range,
+		})
+		p.recover(TokenCBrace)
+		return nil, diags
+	}
+	valVar = string(tok1.Bytes)
+
+	// Check if there is a comma and a second variable
+	if p.Peek().Type == TokenComma {
+		p.Read() // eat comma
+		tok2 := p.Read()
+		if tok2.Type != TokenIdent {
+			diags = append(diags, &hcl.Diagnostic{
+				Severity: hcl.DiagError,
+				Summary:  "Invalid for block",
+				Detail:   "A variable name is required after the comma.",
+				Subject:  &tok2.Range,
+			})
+			p.recover(TokenCBrace)
+			return nil, diags
+		}
+		keyVar = valVar
+		valVar = string(tok2.Bytes)
+	}
+
+	// Expect 'in' keyword
+	inTok := p.Read()
+	if inTok.Type != TokenIdent || string(inTok.Bytes) != "in" {
+		diags = append(diags, &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  "Invalid for block",
+			Detail:   "The 'in' keyword is required after the variable names.",
+			Subject:  &inTok.Range,
+		})
+		p.recover(TokenCBrace)
+		return nil, diags
+	}
+
+	// Parse the collection expression
+	collExpr, collDiags := p.ParseExpression()
+	diags = append(diags, collDiags...)
+
+	// The peeker should now be pointing at the opening brace
+	if p.Peek().Type == TokenOBrace {
+		p.Read()
+	} else {
+		diags = append(diags, &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  "Invalid for block",
+			Detail:   "An opening brace \"{\" is required after the collection expression.",
+			Subject:  p.Peek().Range.Ptr(),
+		})
+		p.recover(TokenCBrace)
+		return nil, diags
+	}
+
+	// Parse the body
+	body, bodyDiags := p.ParseBody(TokenCBrace)
+	diags = append(diags, bodyDiags...)
+	
+	p.PrevRange()
+
+	eol := p.Peek()
+	if eol.Type == TokenNewline || eol.Type == TokenEOF {
+		p.Read()
+	} else {
+		if !p.recovery {
+			diags = append(diags, &hcl.Diagnostic{
+				Severity: hcl.DiagError,
+				Summary:  "Missing newline after for block definition",
+				Detail:   "A for block must end with a newline.",
+				Subject:  &eol.Range,
+			})
+		}
+		p.recoverAfterBodyItem()
+	}
+
+	return &ForBlock{
+		KeyVar:   keyVar,
+		ValVar:   valVar,
+		CollExpr: collExpr,
+		Body:     body,
+		ForRange: ident.Range,
 	}, diags
 }
