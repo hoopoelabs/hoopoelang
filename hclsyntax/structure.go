@@ -233,6 +233,8 @@ func (b *Body) PartialContent(schema *hcl.BodySchema) (*hcl.BodyContent, hcl.Bod
 	remain := &Body{
 		Attributes: b.Attributes,
 		Blocks:     b.Blocks,
+		IfBlocks:   b.IfBlocks,
+		ForBlocks:  b.ForBlocks,
 
 		hiddenAttrs:  hiddenAttrs,
 		hiddenBlocks: hiddenBlocks,
