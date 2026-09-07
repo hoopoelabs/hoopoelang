@@ -14,14 +14,13 @@ import (
 	"github.com/hoopoelabs/hoopoelang"
 	"github.com/hoopoelabs/hoopoelang/hcldec"
 	"github.com/hoopoelabs/hoopoelang/hclparse"
+	"github.com/hoopoelabs/hoopoelang/version"
 	flag "github.com/spf13/pflag"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 	ctyjson "github.com/zclconf/go-cty/cty/json"
 	"golang.org/x/term"
 )
-
-const versionStr = "0.0.1-dev"
 
 // vars is populated from --vars arguments on the command line, via a flag
 // registration in init() below.
@@ -49,7 +48,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println(versionStr)
+		fmt.Println(version.Version)
 		os.Exit(0)
 	}
 

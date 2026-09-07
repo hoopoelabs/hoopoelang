@@ -15,10 +15,9 @@ import (
 	"github.com/hoopoelabs/hoopoelang"
 	"github.com/hoopoelabs/hoopoelang/hclparse"
 	"github.com/hoopoelabs/hoopoelang/hclwrite"
+	"github.com/hoopoelabs/hoopoelang/version"
 	"golang.org/x/term"
 )
-
-const versionStr = "0.0.1-dev"
 
 var (
 	check       = flag.Bool("check", false, "perform a syntax check on the given files and produce diagnostics")
@@ -55,7 +54,7 @@ func realmain() error {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println(versionStr)
+		fmt.Println(version.Version)
 		return nil
 	}
 
